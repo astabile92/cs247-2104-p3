@@ -4,7 +4,11 @@
 (function() {
 
   var cur_video_blob = null;
+  
+  var video_blobs = [];
+  
   var user_is_typing = false;
+  var typing_start = 0;
   var video_stream = null;
   var media_recorder = null;
   var video_dimensions = [160, 120];
@@ -54,9 +58,10 @@
 
     // bind submission box
     $("#submission input").keydown(function( event ) {    
-      if (event.which == 13) {			//Pushed Enter
+      if (event.which == 13 && user_is_typing) {			//Pushed Enter
         user_is_typing = false;
-        if (media_recorder) {
+        cur_time = new Date().getTime();
+        if (media_recorder && cur_time - typing_start > 1500) {
           media_recorder.stop();	//Manually stopping the recorder causes its 'ondataavailable' function to execute
           console.log("stopped media recorder");
           /*
@@ -74,27 +79,31 @@
           }, 100);	//execute this function every 100 milliseconds (could be made smaller, but delay is not noticeable)
           
         } else {
-          console.log("no media recorder, sending non-video message");
+          console.log("sending non-video message");
           fb_instance_stream.push({m:username+": " +$(this).val(), c: my_color});
         }
         $(this).val("");
         
-      } else if (video_stream && !user_is_typing) {
+      } else if (!user_is_typing) {
         user_is_typing = true;
-        cur_video_blob = null;
-        makeMediaRecorder();	//initializes 'media_recorder'
-        media_recorder.start(9000);  //records a maximum 9 seconds of video, then 'ondataavailable' gets called
-        console.log("created media recorder");
+        typing_start = new Date().getTime(); 	//milliseconds since 1970
+        if (video_stream) {
+          cur_video_blob = null;
+          makeMediaRecorder();	//initializes 'media_recorder'
+          media_recorder.start(9000);  //records a maximum 9 seconds of video, then 'ondataavailable' gets called
+          console.log("created media recorder");
+        }
       }
     });
   }
 
   // creates a message node and appends it to the conversation
   function display_msg(data){
-    $("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
+    //$("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
     if(data.v){
       // for video element
       var video = document.createElement("video");
+      video.className = "msg_video";
       video.autoplay = true;
       video.controls = false; // optional
       video.loop = true;
@@ -112,6 +121,7 @@
 
       document.getElementById("conversation").appendChild(video);
     }
+    $("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
     // Scroll to the bottom every time we display a new message
     scroll_to_bottom(0);
   }
