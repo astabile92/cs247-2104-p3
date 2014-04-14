@@ -50,7 +50,7 @@
 
     // bind submission box
     $("#submission input").keydown(function( event ) {
-      if (event.which == 13) {
+      if (event.which == 13) {			//Push Enter
         if(has_emotions($(this).val())){
           fb_instance_stream.push({m:username+": " +$(this).val(), v:cur_video_blob, c: my_color});
         }else{
