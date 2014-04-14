@@ -54,27 +54,37 @@
 
     // bind submission box
     $("#submission input").keydown(function( event ) {    
-      if (event.which == 13) {			//Push Enter
-        
+      if (event.which == 13) {			//Pushed Enter
         user_is_typing = false;
-      
         if (media_recorder) {
-          media_recorder.stop();
+          media_recorder.stop();	//Manually stopping the recorder causes its 'ondataavailable' function to execute
           console.log("stopped media recorder");
-        }
-        fb_instance_stream.push({m:username+": " +$(this).val(), v:cur_video_blob, c: my_color});
-        /*
-        if(has_emotions($(this).val())){
-          fb_instance_stream.push({m:username+": " +$(this).val(), v:cur_video_blob, c: my_color});
-        }else{
+          /*
+           * Problem: once the media recorder is stopped, it takes a few milliseconds to convert the video to base64 (called in 'ondataavailable').
+		   *   So, if you push to FB immediately, 'cur_video_blob' will be null, and no video gets sent along.
+           * To fix this, the following code adds a slight delay to the message send: once 'cur_video_blob' exists, the full message gets sent along
+           * This is probably bug-prone but it works for now and the delay isn't noticeable
+          */
+          var message_str = username+": "+$(this).val();
+          var send_message = setInterval(function() {
+            if ( cur_video_blob ) {
+              fb_instance_stream.push({m:message_str, v:cur_video_blob, c: my_color});
+              clearInterval(send_message);	//user's message sent, so stop executing this function!
+            }
+          }, 100);	//execute this function every 100 milliseconds (could be made smaller, but delay is not noticeable)
+          
+        } else {
+          console.log("no media recorder, sending non-video message");
           fb_instance_stream.push({m:username+": " +$(this).val(), c: my_color});
         }
-        */
         $(this).val("");
-      } else if (media_recorder && !user_is_typing) {  //Key pressed other than Enter
+        
+      } else if (video_stream && !user_is_typing) {
         user_is_typing = true;
-        media_recorder.start();
-        console.log("started media recorder");
+        cur_video_blob = null;
+        makeMediaRecorder();	//initializes 'media_recorder'
+        media_recorder.start(9000);  //records a maximum 9 seconds of video, then 'ondataavailable' gets called
+        console.log("created media recorder");
       }
     });
   }
@@ -168,7 +178,7 @@
           });
       };
 	*/
-	  makeMediaRecorder();
+	  //makeMediaRecorder();
 	/*
       setInterval( function() {
         mediaRecorder.stop();
@@ -206,7 +216,6 @@
     // make recorded media smaller to save some traffic (80 * 60 pixels, 3*24 frames)
     mediaRecorder.video_width = video_width/2;
     mediaRecorder.video_height = video_height/2;
-
     mediaRecorder.ondataavailable = function (blob) {
       console.log("new data available!");
       video_container.innerHTML = "";
@@ -214,8 +223,10 @@
       // convert data into base 64 blocks
       blob_to_base64(blob,function(b64_data){
         cur_video_blob = b64_data;
+        console.log("finished callback, cur_video_blob now set");
       });
     };
+    
     media_recorder = mediaRecorder;
   }
 
