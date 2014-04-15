@@ -2,13 +2,11 @@
 // For CS247, Spring 2014
 
 (function() {
-
-  var cur_video_blob = null;
   
   var video_blobs = [];
-  
+  var done_converting = false;
+  var record_videos = null;
   var user_is_typing = false;
-  var typing_start = 0;
   var video_stream = null;
   var media_recorder = null;
   var video_dimensions = [160, 120];
@@ -60,24 +58,27 @@
     $("#submission input").keydown(function( event ) {    
       if (event.which == 13 && user_is_typing) {			//Pushed Enter
         user_is_typing = false;
-        cur_time = new Date().getTime();
-        if (media_recorder && cur_time - typing_start > 1500) {
+        if (media_recorder) {
+          clearInterval(record_videos);
           media_recorder.stop();	//Manually stopping the recorder causes its 'ondataavailable' function to execute
           console.log("stopped media recorder");
+        }
+        if (video_blobs.length > 1) {
           /*
            * Problem: once the media recorder is stopped, it takes a few milliseconds to convert the video to base64 (called in 'ondataavailable').
 		   *   So, if you push to FB immediately, 'cur_video_blob' will be null, and no video gets sent along.
            * To fix this, the following code adds a slight delay to the message send: once 'cur_video_blob' exists, the full message gets sent along
            * This is probably bug-prone but it works for now and the delay isn't noticeable
-          */
+           */
           var message_str = username+": "+$(this).val();
           var send_message = setInterval(function() {
-            if ( cur_video_blob ) {
-              fb_instance_stream.push({m:message_str, v:cur_video_blob, c: my_color});
+            if ( done_converting ) {
+              fb_instance_stream.push({m:message_str, v:video_blobs, c: my_color});
+              console.log("Sent %d videos", video_blobs.length);
+              video_blobs = [];	//clear videos
               clearInterval(send_message);	//user's message sent, so stop executing this function!
             }
           }, 100);	//execute this function every 100 milliseconds (could be made smaller, but delay is not noticeable)
-          
         } else {
           console.log("sending non-video message");
           fb_instance_stream.push({m:username+": " +$(this).val(), c: my_color});
@@ -86,22 +87,23 @@
         
       } else if (!user_is_typing) {
         user_is_typing = true;
-        typing_start = new Date().getTime(); 	//milliseconds since 1970
         if (video_stream) {
-          cur_video_blob = null;
           makeMediaRecorder();	//initializes 'media_recorder'
-          media_recorder.start(9000);  //records a maximum 9 seconds of video, then 'ondataavailable' gets called
+          //media_recorder.start(2000);  //records a maximum x seconds of video, then 'ondataavailable' gets called
+          
+          record_videos = setInterval( function() {
+      		media_recorder.stop();
+        	media_recorder.start(2000);
+	      }, 2000 );
+	      
           console.log("created media recorder");
         }
       }
     });
   }
 
-  // creates a message node and appends it to the conversation
-  function display_msg(data){
-    //$("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
-    if(data.v){
-      // for video element
+  function create_video_element(video_data) {
+  	// for video element
       var video = document.createElement("video");
       video.className = "msg_video";
       video.autoplay = true;
@@ -110,16 +112,23 @@
       video.width = 120;
 
       var source = document.createElement("source");
-      source.src =  URL.createObjectURL(base64_to_blob(data.v));
+      source.src =  URL.createObjectURL(base64_to_blob(video_data));
       source.type =  "video/webm";
 
       video.appendChild(source);
-
       // for gif instead, use this code below and change mediaRecorder.mimeType in onMediaSuccess below
       // var video = document.createElement("img");
       // video.src = URL.createObjectURL(base64_to_blob(data.v));
-
       document.getElementById("conversation").appendChild(video);
+  }
+
+  // creates a message node and appends it to the conversation
+  function display_msg(data){
+    //$("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
+    if(data.v){
+	  for (var i = 0; i < data.v.length; i++) {
+   		 create_video_element(data.v[i]);
+	  }
     }
     $("#conversation").append("<div class='msg' style='color:"+data.c+"'>"+data.m+"</div>");
     // Scroll to the bottom every time we display a new message
@@ -166,35 +175,6 @@
       var second_counter_update = setInterval(function(){
         second_counter.innerHTML = time++;
       },1000);
-	/*
-      // now record stream in 5 seconds interval
-      var video_container = document.getElementById('video_container');
-      var mediaRecorder = new MediaStreamRecorder(stream);
-      var index = 1;
-
-      mediaRecorder.mimeType = 'video/webm';
-      // mediaRecorder.mimeType = 'image/gif';
-      // make recorded media smaller to save some traffic (80 * 60 pixels, 3*24 frames)
-      mediaRecorder.video_width = video_width/2;
-      mediaRecorder.video_height = video_height/2;
-
-      mediaRecorder.ondataavailable = function (blob) {
-          //console.log("new data available!");
-          video_container.innerHTML = "";
-
-          // convert data into base 64 blocks
-          blob_to_base64(blob,function(b64_data){
-            cur_video_blob = b64_data;
-          });
-      };
-	*/
-	  //makeMediaRecorder();
-	/*
-      setInterval( function() {
-        mediaRecorder.stop();
-        mediaRecorder.start(3000);
-      }, 3000 );
-    */
       console.log("connected to media stream!");
     }
     
@@ -227,30 +207,20 @@
     mediaRecorder.video_width = video_width/2;
     mediaRecorder.video_height = video_height/2;
     mediaRecorder.ondataavailable = function (blob) {
+      done_converting = false;
       console.log("new data available!");
       video_container.innerHTML = "";
 
       // convert data into base 64 blocks
       blob_to_base64(blob,function(b64_data){
-        cur_video_blob = b64_data;
-        console.log("finished callback, cur_video_blob now set");
+        video_blobs.push(b64_data);
+        done_converting = true;
+        console.log("\tFinished converting new data");
       });
     };
     
     media_recorder = mediaRecorder;
   }
-
-  // check to see if a message qualifies to be replaced with video.
-  var has_emotions = function(msg){
-    var options = ["lol",":)",":("];
-    for(var i=0;i<options.length;i++){
-      if(msg.indexOf(options[i])!= -1){
-        return true;
-      }
-    }
-    return false;
-  }
-
 
   // some handy methods for converting blob to base 64 and vice versa
   // for performance bench mark, please refer to http://jsperf.com/blob-base64-conversion/5
