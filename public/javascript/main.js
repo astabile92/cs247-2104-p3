@@ -4,6 +4,7 @@
 (function() {
   
   var video_blobs = [];
+  var video_blob_lengths = 2000;	//in milliseconds
   var done_converting = false;
   var record_videos = null;
   var user_is_typing = false;
@@ -18,9 +19,7 @@
   });
 
   function connect_to_chat_firebase(){
-    /* Include your Firebase link here!*/
-    
-    //fb_instance = new Firebase("https://gsroth-p3-v1.firebaseio.com");
+    /* Include your Firebase link here! */
     fb_instance = new Firebase("https://blazing-fire-2106.firebaseio.com/");
 
     // generate new chatroom id or use existing id
@@ -88,13 +87,11 @@
       } else if (!user_is_typing) {
         user_is_typing = true;
         if (video_stream) {
-          makeMediaRecorder();	//initializes 'media_recorder'
-          //media_recorder.start(2000);  //records a maximum x seconds of video, then 'ondataavailable' gets called
-          
+          makeMediaRecorder();	//initializes 'media_recorder'          
           record_videos = setInterval( function() {
       		media_recorder.stop();
-        	media_recorder.start(2000);
-	      }, 2000 );
+        	media_recorder.start(video_blob_lengths);
+	      }, video_blob_lengths );
 	      
           console.log("created media recorder");
         }
@@ -193,7 +190,6 @@
     if (!video_stream) {
       console.log("couldn't create media recorder: no video stream");
     }
-    
     // now record stream in 5 seconds interval
     var video_container = document.getElementById('video_container');
     var mediaRecorder = new MediaStreamRecorder(video_stream);
