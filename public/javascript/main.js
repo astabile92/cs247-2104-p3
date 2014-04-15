@@ -62,7 +62,7 @@
           media_recorder.stop();	//Manually stopping the recorder causes its 'ondataavailable' function to execute
           console.log("stopped media recorder");
         }
-        if (video_blobs.length > 1) {
+        if (video_blobs.length > 0) {
           /*
            * Problem: once the media recorder is stopped, it takes a few milliseconds to convert the video to base64 (called in 'ondataavailable').
 		   *   So, if you push to FB immediately, 'cur_video_blob' will be null, and no video gets sent along.
