@@ -4,7 +4,7 @@
 (function() {
   
   var video_blobs = [];
-  var video_blob_lengths = 2000;	//in milliseconds
+  var video_blob_lengths = 3000;	//in milliseconds
   var done_converting = false;
   var record_videos = null;
   var user_is_typing = false;
